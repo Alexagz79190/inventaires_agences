@@ -203,38 +203,49 @@ for i in range(st.session_state.nb_agences):
 
 st.markdown("---")
 
+# --------------------------------------------------------------
+# GÉNÉRATION DES RAPPORTS EXCEL AVEC FIX POUR LE DOWNLOAD BUTTON
+# --------------------------------------------------------------
+
 if st.button("Générer les rapports Excel"):
     if len(agence_infos) < 2:
         st.error("Il faut au moins **2 agences** valides (nom + fichier) pour lancer la comparaison.")
     else:
         st.success("Comparaison en cours…")
 
-        # Pour chaque agence, on génère un fichier Excel avec un onglet par agence comparée
+        # On prépare une liste pour stocker les rapports dans session_state
+        st.session_state["rapports"] = {}
+
         for idx_ref, (nom_ref, df_ref) in enumerate(agence_infos):
+
             buffer = BytesIO()
             with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+
                 for idx_other, (nom_other, df_other) in enumerate(agence_infos):
                     if idx_other == idx_ref:
-                        continue  # on ne se compare pas à soi-même
+                        continue  # pas de comparaison avec soi-même
 
                     df_comp = comparer_deux_agences(nom_ref, df_ref, nom_other, df_other)
 
-                    # Nom d'onglet : <AgenceRef>_vs_<AgenceAutre> (tronqué à 31 caractères)
-                    sheet_name = f"{nom_ref}_vs_{nom_other}"
-                    sheet_name = sheet_name[:31]  # limite Excel
-
+                    sheet_name = f"{nom_ref}_vs_{nom_other}"[:31]
                     df_comp.to_excel(writer, index=False, sheet_name=sheet_name)
 
             buffer.seek(0)
 
-            st.download_button(
-                label=f"📥 Télécharger le rapport pour l'agence {nom_ref}",
-                data=buffer,
-                file_name=f"rapport_inventaire_{nom_ref}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            # On stocke dans session_state pour ne PAS disparaître après téléchargement
+            st.session_state["rapports"][nom_ref] = buffer
 
-        st.info(
-            "Un fichier Excel a été généré **pour chaque agence**, "
-            "avec un onglet par agence comparée contenant les références communes et les écarts."
+        st.success("Comparaison terminée ✔")
+
+if "rapports" in st.session_state and st.session_state["rapports"]:
+    st.subheader("Téléchargement des rapports")
+
+    for nom_ref, buffer in st.session_state["rapports"].items():
+        st.download_button(
+            label=f"📥 Télécharger le rapport pour l'agence {nom_ref}",
+            data=buffer,
+            file_name=f"rapport_inventaire_{nom_ref}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"btn_{nom_ref}"
         )
+
